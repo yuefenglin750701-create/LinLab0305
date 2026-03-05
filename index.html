@@ -209,29 +209,8 @@
                             </div>
                             <div className="space-y-6">
                                 <div><h4 className="text-lg font-bold text-slate-800 mb-3 flex items-center border-b pb-2"><Lightbulb className="w-5 h-5 mr-2 text-blue-500" />研究內容</h4><p className="text-slate-600 leading-relaxed">{member.researchDetail || "尚無詳細資料。"}</p></div>
+                                {(member.type === 'alumni' && member.destination) && <div><h4 className="text-lg font-bold text-slate-800 mb-3 flex items-center border-b pb-2"><Briefcase className="w-5 h-5 mr-2 text-purple-500" />畢業去向</h4><p className="text-slate-600 leading-relaxed whitespace-pre-line">{member.destination}</p></div>}
                                 {member.awards && <div><h4 className="text-lg font-bold text-slate-800 mb-3 flex items-center border-b pb-2"><Trophy className="w-5 h-5 mr-2 text-yellow-500" />獲獎與榮譽</h4><p className="text-slate-600 leading-relaxed whitespace-pre-line">{member.awards}</p></div>}
-
-                                {(member.destination || member.destinationOrg || member.destinationRole || member.destinationLocation || member.destinationUrl) && (
-                                    <div>
-                                        <h4 className="text-lg font-bold text-slate-800 mb-3 flex items-center border-b pb-2"><Briefcase className="w-5 h-5 mr-2 text-indigo-500" />畢業去向</h4>
-                                        <div className="text-slate-600 leading-relaxed space-y-2">
-                                            {member.destination && <p className="whitespace-pre-line">{member.destination}</p>}
-                                            {member.destinationOrg && <p><span className="font-semibold text-slate-700">單位：</span>{member.destinationOrg}</p>}
-                                            {member.destinationRole && <p><span className="font-semibold text-slate-700">職務/進修：</span>{member.destinationRole}</p>}
-                                            {member.destinationLocation && <p><span className="font-semibold text-slate-700">地點：</span>{member.destinationLocation}</p>}
-                                            {member.destinationUrl && (
-                                                <button
-                                                    onClick={() => openDataUrl(member.destinationUrl)}
-                                                    className="inline-flex items-center px-3 py-2 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-all text-left"
-                                                >
-                                                    <Globe className="w-4 h-4 mr-2 text-blue-600" />
-                                                    <span className="font-medium text-slate-700">開啟相關連結</span>
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
                                 {member.pdfs && member.pdfs.length > 0 && <div><h4 className="text-lg font-bold text-slate-800 mb-3 flex items-center border-b pb-2"><BookOpen className="w-5 h-5 mr-2 text-green-500" />文獻資料 (PDFs)</h4><div className="grid gap-3">{member.pdfs.map((pdf, idx) => (<button key={idx} onClick={() => handleSecureAccess(pdf.url)} className="flex items-center p-3 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 transition-all group w-full text-left"><div className="bg-red-100 p-2 rounded text-red-600 mr-3 group-hover:bg-red-200"><FileIcon className="w-5 h-5" /></div><div><span className="font-medium text-slate-700 group-hover:text-blue-700 block">{pdf.title}</span><span className="text-xs text-slate-400">點擊開啟文件 (需密碼)</span></div></button>))}</div></div>}
                             </div>
                         </div>
@@ -604,6 +583,11 @@
                       <div key={idx} className="bg-white p-6 rounded-xl border-l-4 border-blue-600 shadow-sm hover:shadow-md transition-shadow flex flex-col md:flex-row gap-4 items-start md:items-center">
                           <div className="md:w-20 flex-shrink-0"><span className="inline-block px-3 py-1 bg-slate-100 text-slate-600 font-bold rounded text-sm">{pub.year}</span></div>
                           <div className="flex-grow"><h3 className="text-lg font-bold text-slate-900 mb-1">{pub.title}</h3><div className="flex flex-wrap items-center gap-2"><span className="text-slate-600 text-sm">{pub.authors}</span><span className="hidden md:inline text-slate-300">|</span><span className="text-blue-600 text-sm font-medium flex items-center"><BookOpen className="w-3 h-3 mr-1" />{pub.venue}</span></div></div>
+                          {(pub.fileUrl || pub.fileData) && (
+                            <a href={pub.fileUrl || pub.fileData} target="_blank" rel="noreferrer" className="inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition mt-2 md:mt-0">
+                              <FileText className="w-4 h-4 mr-2" />查看檔案
+                            </a>
+                          )}
                       </div>
                     ))}
                   </div>
@@ -869,10 +853,11 @@
                                                 </p>
 
                                                 <p className="text-slate-500 font-medium">{member.year}</p>
+                                                {(member.type === 'alumni' && member.destination) && <p className="text-slate-500 text-sm mt-1 line-clamp-2">{member.destination}</p>}
                                             </div>
                                             <div className="p-6 flex-grow">
                                                 <h4 className="text-sm font-bold text-slate-900 mb-2 flex items-center"><Lightbulb className="w-4 h-4 mr-1.5 text-blue-500" />主要研究</h4>
-                                                <p className="text-sm text-slate-600 line-clamp-2">{member.type === 'alumni' ? (member.destinationOrg || member.destination || member.researchDetail) : member.researchDetail}</p>
+                                                <p className="text-sm text-slate-600 line-clamp-2">{member.researchDetail}</p>
                                                 {member.awards && member.awards.length > 0 && <div className="mt-4 pt-4 border-t border-slate-100"><h4 className="text-sm font-bold text-slate-900 mb-2 flex items-center"><Trophy className="w-4 h-4 mr-1.5 text-yellow-500" />獲獎紀錄</h4><ul className="text-sm text-slate-600 space-y-1"><li>{member.awards}</li></ul></div>}
                                             </div>
                                     </div>
