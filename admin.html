@@ -13,9 +13,12 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
-        body { font-family: "Microsoft JhengHei", "Heiti TC", sans-serif; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        body { font-family: "Microsoft JhengHei", "Heiti TC", sans-serif; overflow-x: hidden; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        /* 平滑移動動畫 */
+        .sidebar-transition { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.6; }
     </style>
 </head>
 <body class="bg-slate-100">
@@ -24,21 +27,31 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // --- 全域定義 ---
+        // --- Icons ---
+        const MenuIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>;
+        const CloseIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>;
+
         const TAB_NAMES = { 
             news: '最新消息', 
-            projects: '歷年計畫', 
+            projects: '計畫管理', 
             members: '成員管理', 
             publications: '發表論文', 
-            gallery: '生活寫真',
-            careers: '學生發展'
+            gallery: '生活寫真' 
         };
 
         const supabaseUrl = "https://uyvyxkrikmdyypppqsdt.supabase.co"; 
         const supabaseKey = "sb_publishable_AR5cKUsnsxgFRcC1rDCWlQ_mYRrxVUC"; 
-        const ADMIN_PASS = "0701"; // 預設密碼
 
-        // --- 工具函數：圖片壓縮 ---
+        const getCredentials = () => ({ 
+            username: localStorage.getItem('smsmp_admin_user') || 'yflin', 
+            password: localStorage.getItem('smsmp_admin_pass') || '0701' 
+        });
+
+        const updateCredentials = (u, p) => {
+            localStorage.setItem('smsmp_admin_user', u);
+            localStorage.setItem('smsmp_admin_pass', p);
+        };
+
         const compressImage = (file) => {
             return new Promise((resolve) => {
                 const reader = new FileReader();
@@ -53,43 +66,126 @@
                         if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } }
                         else { if (h > MAX) { w *= MAX / h; h = MAX; } }
                         canvas.width = w; canvas.height = h;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, w, h);
+                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
                         resolve(canvas.toDataURL('image/jpeg', 0.7));
                     };
                 };
             });
         };
 
-        // --- 圖標元件 ---
-        const FolderIcon = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-16 h-16 text-yellow-400 mb-2 group-hover:scale-110 transition-transform">
-                <path d="M19.5 21a3 3 0 0 0 3-3v-4.5a3 3 0 0 0-3-3h-15a3 3 0 0 0-3 3V18a3 3 0 0 0 3 3h15ZM1.5 10.146V6a3 3 0 0 1 3-3h5.379a2.25 2.25 0 0 1 1.59.659l2.122 2.121c.14.141.331.22.53.22H19.5a3 3 0 0 1 3 3v1.146A4.483 4.483 0 0 0 19.5 9h-15a4.483 4.483 0 0 0-3 1.146Z" />
-            </svg>
-        );
+        const fileToBase64 = (file) => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        };
 
-        const HomeIcon = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
-                <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
-            </svg>
-        );
+        // --- 登入介面 ---
+        const LoginForm = ({ onLogin }) => {
+            const [u, setU] = useState('');
+            const [p, setP] = useState('');
+            const [err, setErr] = useState('');
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                const creds = getCredentials();
+                if (u === creds.username && p === creds.password) onLogin();
+                else setErr('帳號或密碼錯誤');
+            };
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4">
+                    <div className="bg-white p-8 md:p-10 rounded-[32px] shadow-2xl w-full max-w-sm border border-slate-200">
+                        <div className="text-center mb-8">
+                            <h2 className="text-2xl font-black text-slate-800 tracking-tight">SMSMP Lab 後台</h2>
+                            <p className="text-slate-400 text-sm mt-2">管理系統登入</p>
+                        </div>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <input className="w-full border-2 border-slate-100 p-4 rounded-2xl focus:border-blue-500 outline-none transition-all" placeholder="管理帳號" value={u} onChange={e=>setU(e.target.value)} required />
+                            <input className="w-full border-2 border-slate-100 p-4 rounded-2xl focus:border-blue-500 outline-none transition-all" type="password" placeholder="管理密碼" value={p} onChange={e=>setP(e.target.value)} required />
+                            {err && <p className="text-red-500 text-center text-sm font-bold bg-red-50 py-2 rounded-xl">{err}</p>}
+                            <button className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black hover:bg-blue-700 transition-all shadow-xl shadow-blue-200">進入系統</button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
 
-        // --- 編輯彈窗元件 ---
+        // --- 修改密碼視窗 ---
+        const ChangePasswordModal = ({ isOpen, onClose }) => {
+            const [oldPass, setOldPass] = useState('');
+            const [newPass, setNewPass] = useState('');
+            const [confirmPass, setConfirmPass] = useState('');
+            const [msg, setMsg] = useState({ type: '', text: '' });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                const current = getCredentials();
+                if (oldPass !== current.password) {
+                    setMsg({ type: 'error', text: '舊密碼驗證失敗' });
+                    return;
+                }
+                if (newPass !== confirmPass) {
+                    setMsg({ type: 'error', text: '新密碼與確認密碼不符' });
+                    return;
+                }
+                updateCredentials(current.username, newPass);
+                setMsg({ type: 'success', text: '修改成功！即將重新登入...' });
+                setTimeout(() => window.location.reload(), 1500);
+            };
+
+            if (!isOpen) return null;
+
+            return (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md p-6 md:p-8">
+                        <h3 className="text-xl font-black mb-6 text-slate-800 flex items-center gap-2">🔒 修改管理密碼</h3>
+                        {msg.text && <div className={`p-4 mb-6 rounded-2xl text-sm font-bold ${msg.type==='error'?'bg-red-50 text-red-600':'bg-green-50 text-green-600'}`}>{msg.text}</div>}
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                <label className="block text-xs font-bold text-slate-400 mb-2 uppercase">驗證當前密碼</label>
+                                <input type="password" placeholder="請輸入舊密碼" value={oldPass} onChange={e => setOldPass(e.target.value)} className="w-full border-2 border-white p-3 rounded-xl focus:border-blue-300 outline-none" required />
+                            </div>
+                            <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                                <label className="block text-xs font-bold text-blue-400 mb-2 uppercase">設定新密碼</label>
+                                <input type="password" placeholder="輸入新密碼" value={newPass} onChange={e => setNewPass(e.target.value)} className="w-full border-2 border-white p-3 rounded-xl mb-3 focus:border-blue-300 outline-none" required />
+                                <input type="password" placeholder="再次確認新密碼" value={confirmPass} onChange={e => setConfirmPass(e.target.value)} className="w-full border-2 border-white p-3 rounded-xl focus:border-blue-300 outline-none" required />
+                            </div>
+                            <div className="flex justify-end gap-3 mt-8">
+                                <button type="button" onClick={onClose} className="px-6 py-3 border rounded-xl font-bold">取消</button>
+                                <button type="submit" className="px-6 py-3 bg-blue-600 text-white rounded-xl font-black">儲存變更</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 編輯視窗 ---
         const EditorModal = ({ activeTab, initData, onSave, onBatchSave, onClose }) => {
-            const [formData, setFormData] = useState({ ...initData });
+            const [formData, setFormData] = useState({ dateMode: 'single', ...initData });
             const [galleryImages, setGalleryImages] = useState([]);
             const [isSaving, setIsSaving] = useState(false);
-
-            useEffect(() => {
-                if (activeTab === 'gallery') setGalleryImages(initData.src ? [{src: initData.src}] : []);
-                if (activeTab === 'members' && !initData.pdfs) setFormData(p => ({...p, pdfs: []}));
-            }, [initData, activeTab]);
+            const [fileError, setFileError] = useState('');
+            const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 
             const handleFile = async (e) => {
+                setFileError('');
                 const files = Array.from(e.target.files);
-                const compressed = await Promise.all(files.map(f => compressImage(f)));
-                if (activeTab === 'gallery') setGalleryImages(prev => [...prev, ...compressed.map(src => ({src}))]);
-                else setFormData(p => ({ ...p, [activeTab === 'members' || activeTab === 'careers' ? 'photo' : 'image']: compressed[0] }));
+                if (files.length === 0) return;
+
+                if (activeTab === 'publications') {
+                    if (files[0].size > MAX_FILE_SIZE) {
+                        setFileError('檔案太大！請上傳小於 2MB 的 PDF。');
+                        e.target.value = null; return;
+                    }
+                    const base64 = await fileToBase64(files[0]);
+                    setFormData(p => ({ ...p, pdfFile: base64, pdfName: files[0].name }));
+                } else {
+                    const compressed = await Promise.all(files.map(f => compressImage(f)));
+                    if (activeTab === 'gallery') setGalleryImages(prev => [...prev, ...compressed.map(src => ({src}))]);
+                    else setFormData(p => ({ ...p, [activeTab === 'members' ? 'photo' : 'image']: compressed[0] }));
+                }
             };
 
             const handleSubmit = async (e) => {
@@ -100,9 +196,7 @@
                         const items = galleryImages.map((img, idx) => ({ ...formData, src: img.src, createdAt: Date.now() - idx * 1000 }));
                         await onBatchSave(items);
                     } else {
-                        const data = { ...formData };
-                        if (activeTab === 'gallery' && galleryImages.length > 0) data.src = galleryImages[0].src;
-                        await onSave(data);
+                        await onSave(formData);
                     }
                     onClose();
                 } catch (err) { alert("儲存失敗"); }
@@ -110,73 +204,112 @@
             };
 
             return (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm overflow-y-auto">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-8 relative my-auto">
-                        <h3 className="text-2xl font-bold mb-6 text-slate-800">{formData.id ? '編輯' : '新增'}{TAB_NAMES[activeTab]}</h3>
-                        <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[110] p-4 backdrop-blur-sm overflow-y-auto custom-scrollbar">
+                    <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-2xl p-6 md:p-10 relative my-auto">
+                        <h3 className="text-2xl md:text-3xl font-black mb-6 text-slate-800">{formData.id ? '編輯' : '新增'}{TAB_NAMES[activeTab]}</h3>
+                        <form onSubmit={handleSubmit} className="space-y-5">
+                            
                             <div>
-                                <label className="block text-sm font-bold text-slate-700 mb-1">主要標題 / 姓名</label>
-                                <input required value={formData.title || formData.name || ''} onChange={e=>setFormData({...formData, [activeTab==='members' || activeTab==='careers' ?'name':'title']:e.target.value})} className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                                <label className="block text-sm font-bold text-slate-700 mb-2">主要名稱 / 標題</label>
+                                <input required value={formData.title || formData.name || ''} onChange={e=>setFormData({...formData, [activeTab==='members'?'name':'title']:e.target.value})} className="w-full border-2 border-slate-100 p-3 md:p-4 rounded-2xl focus:border-blue-500 outline-none font-bold" />
                             </div>
-
-                            {activeTab === 'news' && (
-                                <div className="grid grid-cols-2 gap-4">
-                                    <input type="date" value={formData.date||''} onChange={e=>setFormData({...formData, date:e.target.value})} className="border p-3 rounded-lg" />
-                                    <select value={formData.tag||'Activity'} onChange={e=>setFormData({...formData, tag:e.target.value})} className="border p-3 rounded-lg">
-                                        <option value="Activity">一般動態</option>
-                                        <option value="Award">榮譽獲獎</option>
-                                    </select>
-                                </div>
-                            )}
 
                             {activeTab === 'projects' && (
                                 <div className="grid grid-cols-2 gap-4">
-                                    <input placeholder="年度 (如 113)" value={formData.year||''} onChange={e=>setFormData({...formData, year:e.target.value})} className="border p-3 rounded-lg" />
-                                    <select value={formData.type||'government'} onChange={e=>setFormData({...formData, type:e.target.value})} className="border p-3 rounded-lg">
-                                        <option value="government">教育部/國科會計畫</option>
-                                        <option value="industry">產學合作計畫</option>
-                                        <option value="patent">專利與技術</option>
-                                        <option value="competition">競賽獲獎</option>
+                                    <div className="col-span-1">
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">計畫年度</label>
+                                        <input placeholder="113" value={formData.planYear || ''} onChange={e=>setFormData({...formData, planYear:e.target.value})} className="w-full border-2 border-slate-100 p-3 rounded-2xl focus:border-blue-500 outline-none" />
+                                    </div>
+                                    <div className="col-span-1">
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">執行年度</label>
+                                        <input placeholder="113-114" value={formData.execYear || ''} onChange={e=>setFormData({...formData, execYear:e.target.value})} className="w-full border-2 border-slate-100 p-3 rounded-2xl focus:border-blue-500 outline-none" />
+                                    </div>
+
+                                    <div className="col-span-2 space-y-3">
+                                        <div className="flex gap-2">
+                                            <button type="button" onClick={()=>setFormData({...formData, dateMode: 'single'})} className={`flex-1 py-2 text-xs rounded-lg font-bold border-2 transition-all ${formData.dateMode==='single'?'bg-blue-600 border-blue-600 text-white':'bg-white text-slate-400'}`}>單一日期</button>
+                                            <button type="button" onClick={()=>setFormData({...formData, dateMode: 'range'})} className={`flex-1 py-2 text-xs rounded-lg font-bold border-2 transition-all ${formData.dateMode==='range'?'bg-blue-600 border-blue-600 text-white':'bg-white text-slate-400'}`}>時間分段</button>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3 bg-slate-50 p-4 rounded-2xl">
+                                            <input type="date" required value={formData.startDate || ''} onChange={e=>{
+                                                const d = e.target.value;
+                                                const y = d ? (new Date(d).getFullYear() - 1911) : '';
+                                                setFormData({...formData, startDate: d, year: y.toString(), planYear: formData.planYear || y.toString()});
+                                            }} className="w-full border-2 border-white p-2 rounded-xl text-sm" />
+                                            {formData.dateMode === 'range' && <input type="date" required value={formData.endDate || ''} onChange={e=>setFormData({...formData, endDate:e.target.value})} className="w-full border-2 border-white p-2 rounded-xl text-sm" />}
+                                        </div>
+                                    </div>
+
+                                    <div className="col-span-2">
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">標籤與單位</label>
+                                        <div className="flex flex-col gap-3">
+                                            <select value={formData.type || 'government'} onChange={e=>setFormData({...formData, type:e.target.value})} className="w-full border-2 border-slate-100 p-3 rounded-2xl text-sm">
+                                                <option value="government">國科會 / 教育部計畫</option><option value="industry">產學合作計畫</option><option value="research">一般研究計畫</option>
+                                            </select>
+                                            <input placeholder="委託單位" value={formData.agency||''} onChange={e=>setFormData({...formData, agency:e.target.value})} className="w-full border-2 border-slate-100 p-3 rounded-2xl text-sm" />
+                                            <input placeholder="主持人" value={formData.role||''} onChange={e=>setFormData({...formData, role:e.target.value})} className="w-full border-2 border-slate-100 p-3 rounded-2xl text-sm" />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'publications' && (
+                                <div className="space-y-4">
+                                    <input value={formData.authors || ''} onChange={e=>setFormData({...formData, authors:e.target.value})} className="w-full border-2 border-slate-100 p-3 rounded-2xl" placeholder="作者列表 (Authors)" />
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <input type="date" required value={formData.fullDate || ''} onChange={e => {
+                                            const d = e.target.value; const y = d ? new Date(d).getFullYear() : '';
+                                            setFormData({...formData, fullDate: d, year: y.toString()});
+                                        }} className="w-full border-2 border-slate-100 p-3 rounded-2xl text-sm" />
+                                        <input value={formData.venue || ''} onChange={e=>setFormData({...formData, venue:e.target.value})} className="w-full border-2 border-slate-100 p-3 rounded-2xl text-sm" placeholder="期刊名稱 (Venue)" />
+                                    </div>
+                                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <div className="flex justify-between items-center mb-2"><span className="text-xs font-bold text-slate-600">PDF 檔案 (2MB 內)</span></div>
+                                        <input type="file" accept="application/pdf" onChange={handleFile} className="w-full text-xs" />
+                                        {fileError && <p className="text-red-500 text-[10px] font-bold mt-1">{fileError}</p>}
+                                        {formData.pdfName && <div className="mt-2 text-[10px] font-bold text-blue-600 truncate">📄 {formData.pdfName}</div>}
+                                    </div>
+                                    <input value={formData.url || ''} onChange={e=>setFormData({...formData, url:e.target.value})} className="w-full border-2 border-blue-50 p-3 rounded-2xl bg-blue-50/20 text-xs" placeholder="或輸入雲端網址 URL" />
+                                </div>
+                            )}
+
+                            {activeTab === 'news' && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <input type="date" value={formData.date||''} onChange={e=>setFormData({...formData, date:e.target.value})} className="border-2 border-slate-100 p-3 rounded-2xl" />
+                                    <select value={formData.tag||'Activity'} onChange={e=>setFormData({...formData, tag:e.target.value})} className="border-2 border-slate-100 p-3 rounded-2xl">
+                                        <option value="Activity">一般動態</option><option value="Award">榮譽獲獎</option>
                                     </select>
-                                    <input placeholder="委託單位" value={formData.agency||''} onChange={e=>setFormData({...formData, agency:e.target.value})} className="border p-3 rounded-lg col-span-2" />
-                                    <textarea placeholder="詳細說明" value={formData.desc||''} onChange={e=>setFormData({...formData, desc:e.target.value})} className="border p-3 rounded-lg col-span-2" />
                                 </div>
                             )}
 
                             {activeTab === 'members' && (
-                                <div className="grid grid-cols-2 gap-4">
-                                    <select value={formData.type||'master'} onChange={e=>setFormData({...formData, type:e.target.value})} className="border p-3 rounded-lg">
-                                        <option value="pi">指導教授</option>
-                                        <option value="phd">博士生</option>
-                                        <option value="master">碩士生</option>
-                                        <option value="alumni">畢業校友</option>
-                                    </select>
-                                    <input placeholder="年級 (如 碩一)" value={formData.year||''} onChange={e=>setFormData({...formData, year:e.target.value})} className="border p-3 rounded-lg" />
-                                    <textarea placeholder="詳細研究內容" value={formData.researchDetail||''} onChange={e=>setFormData({...formData, researchDetail:e.target.value})} className="border p-3 rounded-lg col-span-2 h-24" />
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <select value={formData.type||'master'} onChange={e=>setFormData({...formData, type:e.target.value})} className="border-2 border-slate-100 p-3 rounded-2xl text-sm">
+                                            <option value="pi">指導教授</option><option value="phd">博士生</option><option value="master">碩士生</option><option value="alumni">畢業校友</option>
+                                        </select>
+                                        <input placeholder="年級 (如碩一)" value={formData.year||''} onChange={e=>setFormData({...formData, year:e.target.value})} className="border-2 border-slate-100 p-3 rounded-2xl text-sm" />
+                                    </div>
+                                    <textarea placeholder="研究方向詳細內容..." value={formData.researchDetail||''} onChange={e=>setFormData({...formData, researchDetail:e.target.value})} className="border-2 border-slate-100 p-3 rounded-2xl w-full h-24 text-sm" />
                                 </div>
                             )}
 
-                            {activeTab === 'careers' && (
-                                <div className="grid grid-cols-2 gap-4">
-                                    <input placeholder="畢業年度 (如 112)" value={formData.year||''} onChange={e=>setFormData({...formData, year:e.target.value})} className="border p-3 rounded-lg" />
-                                    <input placeholder="目前就業情況 / 公司名稱" value={formData.status||''} onChange={e=>setFormData({...formData, status:e.target.value})} className="border p-3 rounded-lg" />
+                            {activeTab !== 'projects' && activeTab !== 'publications' && (
+                                <div className="p-4 bg-slate-50 rounded-2xl">
+                                    <label className="block text-xs font-bold text-slate-500 mb-2">圖片上傳</label>
+                                    <input type="file" multiple={activeTab==='gallery'} accept="image/*" onChange={handleFile} className="w-full text-xs" />
+                                    <div className="flex gap-2 mt-3 overflow-x-auto p-1">
+                                        {(activeTab === 'gallery' ? galleryImages : [{src: formData.photo || formData.image}]).map((img, i) => img.src && (
+                                            <img key={i} src={img.src} className="w-16 h-16 object-cover rounded-lg border shadow-sm" />
+                                        ))}
+                                    </div>
                                 </div>
                             )}
 
-                            <div>
-                                <label className="block text-sm font-bold mb-1">圖片上傳 (自動壓縮)</label>
-                                <input type="file" multiple={activeTab==='gallery'} accept="image/*" onChange={handleFile} className="w-full text-sm" />
-                                <div className="grid grid-cols-5 gap-2 mt-2">
-                                    {(activeTab === 'gallery' ? galleryImages : [{src: formData.photo || formData.image}]).map((img, i) => img.src && (
-                                        <img key={i} src={img.src} className="w-full aspect-square object-cover rounded border border-slate-200" />
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="flex justify-end gap-3 pt-6 border-t">
-                                <button type="button" onClick={onClose} className="px-6 py-2 border rounded-lg hover:bg-slate-50 transition-colors">取消</button>
-                                <button type="submit" disabled={isSaving} className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50">
-                                    {isSaving ? '處理中...' : '儲存資料'}
+                            <div className="flex gap-3 pt-6 border-t">
+                                <button type="button" onClick={onClose} className="flex-1 py-3 border-2 rounded-2xl font-bold text-slate-400">取消</button>
+                                <button type="submit" disabled={isSaving} className="flex-1 py-3 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-100 disabled:opacity-50">
+                                    {isSaving ? '處理中' : '儲存'}
                                 </button>
                             </div>
                         </form>
@@ -185,53 +318,34 @@
             );
         };
 
-        // --- 主程式元件 ---
         const AdminApp = () => {
             const [isLoggedIn, setIsLoggedIn] = useState(false);
             const [tab, setTab] = useState('news');
             const [dataList, setDataList] = useState([]);
             const [loading, setLoading] = useState(false);
             const [editing, setEditing] = useState(null);
-            const [viewingAlbum, setViewingAlbum] = useState(null);
+            const [isPwdModalOpen, setIsPwdModalOpen] = useState(false);
+            const [isSidebarOpen, setIsSidebarOpen] = useState(false);
             const [supabase, setSupabase] = useState(null);
 
-            // 初始化 Supabase
             useEffect(() => {
-                const client = window.supabase.createClient(supabaseUrl, supabaseKey);
-                setSupabase(client);
+                setSupabase(window.supabase.createClient(supabaseUrl, supabaseKey));
             }, []);
 
             const loadData = async () => {
                 if (!supabase) return;
                 setLoading(true);
-                const { data, error } = await supabase
-                    .from('lab_content')
-                    .select('id, data')
-                    .eq('collection', tab)
-                    .order('created_at', { ascending: false });
-                
+                const { data, error } = await supabase.from('lab_content').select('id, data').eq('collection', tab).order('created_at', { ascending: false });
                 if (!error) setDataList(data.map(r => ({ id: r.id, ...r.data })));
                 setLoading(false);
             };
 
             useEffect(() => { if (isLoggedIn && supabase) loadData(); }, [isLoggedIn, tab, supabase]);
 
-            const handleDelete = async (id) => {
-                if (!confirm('確定要刪除這筆資料嗎？')) return;
-                const { error } = await supabase.from('lab_content').delete().eq('id', id);
-                if (!error) loadData();
-            };
-
             const handleSave = async (payload) => {
-                const isNew = !payload.id;
                 const dataToSave = { collection: tab, data: { ...payload, updatedAt: Date.now() } };
-                
-                if (isNew) {
-                    await supabase.from('lab_content').insert(dataToSave);
-                } else {
-                    const { id, ...cleanData } = payload;
-                    await supabase.from('lab_content').update({ data: cleanData }).eq('id', payload.id);
-                }
+                if (!payload.id) await supabase.from('lab_content').insert(dataToSave);
+                else await supabase.from('lab_content').update({ data: payload }).eq('id', payload.id);
                 loadData();
             };
 
@@ -241,149 +355,109 @@
                 loadData();
             };
 
-            const albumGroups = useMemo(() => {
-                if (tab !== 'gallery') return {};
-                const g = {};
-                dataList.forEach(item => {
-                    const t = item.title || '未分類相簿';
-                    if (!g[t]) g[t] = [];
-                    g[t].push(item);
-                });
-                return g;
-            }, [dataList, tab]);
+            const handleDelete = async (id) => {
+                if (confirm('確定要刪除嗎？')) { await supabase.from('lab_content').delete().eq('id', id); loadData(); }
+            };
 
-            const displayList = useMemo(() => {
-                if (tab === 'gallery' && viewingAlbum) return dataList.filter(d => (d.title || '未分類相簿') === viewingAlbum);
-                return dataList;
-            }, [dataList, tab, viewingAlbum]);
-
-            if (!isLoggedIn) return (
-                <div className="h-screen flex items-center justify-center bg-slate-900 px-4">
-                    <form onSubmit={e => { e.preventDefault(); if(e.target.pw.value === ADMIN_PASS) setIsLoggedIn(true); else alert('密碼錯誤'); }} 
-                          className="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-sm">
-                        <div className="text-center mb-8">
-                            <h2 className="text-2xl font-bold text-slate-800">SMSMP Lab 後台</h2>
-                            <p className="text-slate-400 text-sm mt-2">請輸入管理密碼以繼續</p>
-                        </div>
-                        <input name="pw" type="password" placeholder="密碼 (預設 0701)" className="w-full border p-4 rounded-xl mb-6 focus:ring-2 focus:ring-blue-500 outline-none" required autoFocus />
-                        <button className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">登入系統</button>
-                    </form>
-                </div>
-            );
+            if (!isLoggedIn) return <LoginForm onLogin={() => setIsLoggedIn(true)} />;
 
             return (
-                <div className="min-h-screen flex bg-slate-50">
-                    {/* 側邊導覽 */}
-                    <aside className="w-72 bg-slate-900 text-white p-8 flex-shrink-0 shadow-2xl z-10 text-nowrap flex flex-col">
-                        <div className="mb-12">
+                <div className="min-h-screen flex flex-col md:flex-row bg-slate-50 font-sans">
+                    
+                    {/* Mobile Header */}
+                    <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center sticky top-0 z-50">
+                        <div className="font-black text-blue-400">SMSMP LAB</div>
+                        <button onClick={()=>setIsSidebarOpen(!isSidebarOpen)} className="p-2 bg-slate-800 rounded-lg text-white">
+                            {isSidebarOpen ? <CloseIcon /> : <MenuIcon />}
+                        </button>
+                    </div>
+
+                    {/* Sidebar */}
+                    <aside className={`fixed md:sticky top-0 left-0 h-screen w-72 bg-slate-900 text-white p-8 flex-shrink-0 shadow-2xl flex flex-col z-[100] sidebar-transition transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+                        <div className="mb-12 hidden md:block text-center">
                             <h1 className="text-2xl font-black text-blue-400 tracking-tighter">SMSMP LAB</h1>
-                            <p className="text-slate-500 text-xs mt-1 uppercase font-bold tracking-widest">Control Panel</p>
+                            <p className="text-slate-500 text-[10px] uppercase font-bold tracking-widest mt-1">Administrator</p>
                         </div>
-                        <nav className="space-y-2 flex-grow">
+                        <nav className="space-y-1 flex-grow">
                             {Object.entries(TAB_NAMES).map(([key, label]) => (
-                                <button key={key} onClick={() => { setTab(key); setViewingAlbum(null); }} 
-                                        className={`w-full text-left px-5 py-4 rounded-2xl transition-all duration-200 font-medium flex items-center gap-3 ${tab===key ? 'bg-blue-600 shadow-xl shadow-blue-900/50 scale-105' : 'hover:bg-slate-800 text-slate-400'}`}>
-                                    <div className={`w-2 h-2 rounded-full ${tab===key ? 'bg-white' : 'bg-transparent'}`}></div>
+                                <button key={key} onClick={() => { setTab(key); setIsSidebarOpen(false); }} 
+                                        className={`w-full text-left px-5 py-4 rounded-2xl transition-all font-bold flex items-center gap-3 ${tab===key ? 'bg-blue-600 shadow-lg scale-105' : 'hover:bg-slate-800 text-slate-400'}`}>
+                                    <div className={`w-1.5 h-1.5 rounded-full ${tab===key ? 'bg-white' : 'bg-transparent'}`}></div>
                                     {label}
                                 </button>
                             ))}
-                            
-                            {/* 返回前台按鈕 */}
-                            <div className="pt-6">
-                                <a href="./index.html" className="w-full text-left px-5 py-4 rounded-2xl transition-all duration-200 font-bold flex items-center bg-blue-900/30 text-blue-400 border border-blue-700/50 hover:bg-blue-800 hover:text-white group">
-                                    <HomeIcon />
-                                    返回前台網頁
-                                </a>
+                            <div className="mt-8 pt-8 border-t border-slate-800 space-y-2">
+                                <button onClick={() => {setIsPwdModalOpen(true); setIsSidebarOpen(false);}} className="w-full text-left px-5 py-4 rounded-2xl font-bold text-blue-400 border border-blue-900/30 hover:bg-blue-900/20 transition-all text-sm">🔒 修改管理密碼</button>
+                                <a href="./index.html" className="w-full text-left px-5 py-4 rounded-2xl font-bold text-slate-400 hover:bg-slate-800 transition-all text-sm">🏠 返回前台網頁</a>
                             </div>
                         </nav>
-                        <div className="mt-20 pt-8 border-t border-slate-800">
-                             <button onClick={() => window.location.reload()} className="text-xs text-slate-600 hover:text-slate-400 transition-colors">登出系統</button>
-                        </div>
+                        <button onClick={() => window.location.reload()} className="mt-8 pt-6 border-t border-slate-800 text-xs text-slate-600 font-bold hover:text-slate-400 text-left">登出系統</button>
                     </aside>
+
+                    {/* Overlay for Mobile Sidebar */}
+                    {isSidebarOpen && <div onClick={()=>setIsSidebarOpen(false)} className="fixed inset-0 bg-black/60 z-[90] md:hidden backdrop-blur-sm"></div>}
                     
-                    {/* 主內容區 */}
-                    <main className="flex-grow p-12 overflow-y-auto h-screen custom-scrollbar">
-                        <header className="flex justify-between items-end mb-10">
+                    <main className="flex-grow p-4 md:p-12 overflow-y-auto h-screen custom-scrollbar">
+                        <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 md:mb-12 gap-4">
                             <div>
-                                <h2 className="text-4xl font-bold text-slate-800 flex items-center gap-4">
-                                    {tab === 'gallery' && viewingAlbum && (
-                                        <button onClick={() => setViewingAlbum(null)} className="text-blue-500 hover:scale-125 transition-transform">←</button>
-                                    )}
-                                    {tab === 'gallery' && viewingAlbum ? viewingAlbum : TAB_NAMES[tab]}
-                                </h2>
-                                <p className="text-slate-400 mt-2">管理您的網站內容，所有更動將即時反應在前台。</p>
+                                <h2 className="text-3xl md:text-5xl font-black text-slate-800 tracking-tight">{TAB_NAMES[tab]}</h2>
+                                <p className="text-slate-400 mt-2 font-medium hidden md:block">管理實驗室網站內容</p>
                             </div>
-                            <button onClick={() => setEditing({})} className="bg-green-600 text-white px-8 py-4 rounded-2xl shadow-xl hover:bg-green-700 transition-all font-bold flex items-center gap-2">
-                                <span className="text-xl">+</span> 新增資料
-                            </button>
+                            <button onClick={() => setEditing({})} className="w-full md:w-auto bg-blue-600 text-white px-8 py-4 rounded-2xl shadow-xl shadow-blue-200 hover:bg-blue-700 font-black transition-all">+ 新增{TAB_NAMES[tab]}</button>
                         </header>
 
-                        {loading ? (
-                            <div className="flex items-center justify-center h-64 text-slate-400 animate-pulse">連線資料庫中...</div>
-                        ) : (
-                            <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-                                {tab === 'gallery' && !viewingAlbum ? (
-                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 p-10">
-                                        {Object.entries(albumGroups).map(([title, items]) => (
-                                            <div key={title} onClick={() => setViewingAlbum(title)} 
-                                                 className="group border border-slate-100 rounded-3xl p-8 cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all flex flex-col items-center text-center shadow-sm">
-                                                <FolderIcon />
-                                                <span className="font-bold text-slate-800">{title}</span>
-                                                <span className="text-xs text-slate-400 mt-2 bg-slate-100 px-2 py-1 rounded-full">{items.length} 張相片</span>
+                        <div className="bg-white rounded-[24px] md:rounded-[40px] shadow-sm border border-slate-200 overflow-hidden">
+                            {/* Desktop View Table */}
+                            <table className="w-full text-left hidden md:table">
+                                <thead className="bg-slate-50 border-b"><tr className="text-slate-500 text-xs uppercase font-black tracking-widest"><th className="p-8">內容描述</th><th className="p-8 text-right">管理操作</th></tr></thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {dataList.map(item => (
+                                        <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group">
+                                            <td className="p-8">
+                                                <div className="font-black text-slate-800 text-lg">{item.title || item.name}</div>
+                                                <div className="text-[11px] text-slate-400 font-bold mt-1 flex gap-4 uppercase tracking-tighter">
+                                                    {item.planYear && <span className="text-blue-500 px-2 py-0.5 bg-blue-50 rounded">計畫年度: {item.planYear}</span>}
+                                                    {item.execYear && <span className="text-slate-500 px-2 py-0.5 bg-slate-100 rounded">執行年度: {item.execYear}</span>}
+                                                    {!item.planYear && <span>{item.year || item.date || '----'}</span>}
+                                                </div>
+                                            </td>
+                                            <td className="p-8 text-right space-x-4">
+                                                <button onClick={() => setEditing(item)} className="text-blue-600 font-black hover:underline transition-all">編輯</button>
+                                                <button onClick={() => handleDelete(item.id)} className="text-red-400 font-bold hover:underline transition-all">刪除</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+
+                            {/* Mobile View Cards */}
+                            <div className="md:hidden divide-y divide-slate-100">
+                                {dataList.map(item => (
+                                    <div key={item.id} className="p-5 space-y-3">
+                                        <div>
+                                            <div className="font-black text-slate-800">{item.title || item.name}</div>
+                                            <div className="text-[10px] text-slate-400 font-bold mt-1 flex flex-wrap gap-2">
+                                                {item.planYear && <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded">年度: {item.planYear}</span>}
+                                                {item.tag && <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded">{item.tag}</span>}
+                                                {!item.planYear && <span>{item.year || item.date || '----'}</span>}
                                             </div>
-                                        ))}
-                                        {Object.keys(albumGroups).length === 0 && <div className="col-span-full py-20 text-center text-slate-300">尚無任何相簿</div>}
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => setEditing(item)} className="flex-1 bg-slate-50 py-3 rounded-xl text-blue-600 font-black text-sm">編輯</button>
+                                            <button onClick={() => handleDelete(item.id)} className="flex-1 bg-slate-50 py-3 rounded-xl text-red-400 font-black text-sm">刪除</button>
+                                        </div>
                                     </div>
-                                ) : (
-                                    <table className="w-full">
-                                        <thead>
-                                            <tr className="bg-slate-50 border-b text-slate-500 text-sm">
-                                                <th className="p-6 font-bold text-left">內容詳情</th>
-                                                <th className="p-6 font-bold text-right">管理操作</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                            {displayList.map(item => (
-                                                <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                                                    <td className="p-6">
-                                                        <div className="flex items-center gap-6">
-                                                            <div className="w-16 h-16 bg-slate-100 rounded-2xl overflow-hidden shadow-inner flex-shrink-0">
-                                                                {(item.photo || item.image || item.src) ? (
-                                                                    <img src={item.photo || item.image || item.src} className="w-full h-full object-cover" />
-                                                                ) : (
-                                                                    <div className="w-full h-full flex items-center justify-center text-slate-300">無圖</div>
-                                                                )}
-                                                            </div>
-                                                            <div>
-                                                                <div className="font-bold text-slate-800 text-lg">{item.title || item.name}</div>
-                                                                <div className="flex gap-3 mt-1">
-                                                                    <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{item.year || item.date}</span>
-                                                                    <span className="text-xs text-slate-400">{item.status || item.type || item.tag || '預設'}</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="p-6 text-right space-x-4">
-                                                        <button onClick={() => setEditing(item)} className="text-blue-600 font-bold hover:underline">編輯</button>
-                                                        <button onClick={() => handleDelete(item.id)} className="text-red-400 font-bold hover:underline">刪除</button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                )}
-                                {displayList.length === 0 && !viewingAlbum && <div className="p-20 text-center text-slate-300">此分類目前尚無資料，請點擊右上方按鈕新增。</div>}
+                                ))}
                             </div>
-                        )}
+                            {dataList.length === 0 && <div className="p-20 text-center text-slate-300 font-bold">目前暫無資料</div>}
+                        </div>
                     </main>
-                    
-                    {/* 編輯彈窗 */}
                     {editing && <EditorModal activeTab={tab} initData={editing} onSave={handleSave} onBatchSave={handleBatchSave} onClose={() => setEditing(null)} />}
+                    <ChangePasswordModal isOpen={isPwdModalOpen} onClose={() => setIsPwdModalOpen(false)} />
                 </div>
             );
         };
 
-        // --- 啟動 React ---
         const rootElement = document.getElementById('root');
         if (rootElement) {
             ReactDOM.createRoot(rootElement).render(<AdminApp />);
