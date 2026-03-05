@@ -40,7 +40,7 @@
         const supabaseKey = "sb_publishable_AR5cKUsnsxgFRcC1rDCWlQ_mYRrxVUC"; 
 
         try {
-            const { createClient } = supabase;
+            const { createClient } = window.supabase;
             const _supabase = createClient(supabaseUrl, supabaseKey);
             
             window.isLocal = false;

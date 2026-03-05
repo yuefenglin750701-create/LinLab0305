@@ -150,8 +150,40 @@
                                         <option value="master">碩士生</option>
                                         <option value="alumni">畢業校友</option>
                                     </select>
+
                                     <input placeholder="年級 (如 碩一)" value={formData.year||''} onChange={e=>setFormData({...formData, year:e.target.value})} className="border p-3 rounded-lg" />
+
                                     <textarea placeholder="詳細研究內容" value={formData.researchDetail||''} onChange={e=>setFormData({...formData, researchDetail:e.target.value})} className="border p-3 rounded-lg col-span-2 h-24" />
+
+                                    {/* ✅ 新增：校友去向（只有 alumni 才顯示） */}
+                                    {formData.type === 'alumni' && (
+                                        <>
+                                            <input
+                                                placeholder="任職/升學單位（公司或學校）"
+                                                value={formData.destinationOrg || ''}
+                                                onChange={e=>setFormData({...formData, destinationOrg:e.target.value})}
+                                                className="border p-3 rounded-lg col-span-2"
+                                            />
+                                            <input
+                                                placeholder="職稱/身分（工程師、研發、博士班...）"
+                                                value={formData.destinationRole || ''}
+                                                onChange={e=>setFormData({...formData, destinationRole:e.target.value})}
+                                                className="border p-3 rounded-lg"
+                                            />
+                                            <input
+                                                placeholder="地點（台中/新竹/海外...）"
+                                                value={formData.destinationLocation || ''}
+                                                onChange={e=>setFormData({...formData, destinationLocation:e.target.value})}
+                                                className="border p-3 rounded-lg"
+                                            />
+                                            <input
+                                                placeholder="相關連結（LinkedIn/公司頁/實驗室頁）"
+                                                value={formData.destinationUrl || ''}
+                                                onChange={e=>setFormData({...formData, destinationUrl:e.target.value})}
+                                                className="border p-3 rounded-lg col-span-2"
+                                            />
+                                        </>
+                                    )}
                                 </div>
                             )}
 
@@ -189,8 +221,16 @@
 
             // 初始化 Supabase
             useEffect(() => {
-                const client = window.supabase.createClient(supabaseUrl, supabaseKey);
-                setSupabase(client);
+                try {
+                    if (!window.supabase || !window.supabase.createClient) {
+                        console.warn("Supabase SDK not loaded. Please check the script tag.");
+                        return;
+                    }
+                    const client = window.supabase.createClient(supabaseUrl, supabaseKey);
+                    setSupabase(client);
+                } catch (e) {
+                    console.warn("Supabase init failed:", e);
+                }
             }, []);
 
             const loadData = async () => {
