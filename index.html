@@ -249,6 +249,7 @@
           const [membersData, setMembersData] = useState([]);
           const [galleryImages, setGalleryImages] = useState([]);
           const [publications, setPublications] = useState([]);
+          const [careersData, setCareersData] = useState([]);
           const [loading, setLoading] = useState(true);
 
           const labInfo = {
@@ -268,8 +269,8 @@
 
           useEffect(() => {
             const initData = async () => {
-                const collections = ['news', 'projects', 'members', 'gallery', 'publications'];
-                const setters = [setNews, setProjects, setMembersData, setGalleryImages, setPublications];
+                const collections = ['news', 'projects', 'members', 'gallery', 'publications', 'careers'];
+                const setters = [setNews, setProjects, setMembersData, setGalleryImages, setPublications, setCareersData];
                 
                 collections.forEach((colName, index) => {
                     window.dataOps.subscribe(colName, (list) => {
@@ -283,6 +284,8 @@
                                 });
                         } else if (colName === 'news') {
                             list.sort((a, b) => new Date(b.date) - new Date(a.date));
+                        } else if (colName === 'careers') {
+                            list.sort((a, b) => parseInt(b.year || 0) - parseInt(a.year || 0));
                         } else if (colName === 'projects') {
                                 list.sort((a, b) => {
                                     const getYear = (str) => {
@@ -858,6 +861,50 @@
                             </div>
                         </>
                     )}
+
+                    {/* 學生未來發展區塊 */}
+                    <div className="mt-24 border-t pt-16">
+                        <div className="flex items-center mb-10">
+                            <Briefcase className="w-8 h-8 text-blue-700 mr-4" />
+                            <div>
+                                <h2 className="text-3xl font-bold text-slate-900">學生未來發展</h2>
+                                <p className="text-slate-500 text-sm mt-1">Graduate Careers & Placements</p>
+                            </div>
+                        </div>
+                        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-sm">
+                                        <th className="p-5 font-bold">畢業年度</th>
+                                        <th className="p-5 font-bold">學生姓名</th>
+                                        <th className="p-5 font-bold">目前就業 / 發展情況</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {careersData.length === 0 ? (
+                                        <tr><td colSpan="3" className="p-10 text-center text-slate-400">目前尚無發展資料。</td></tr>
+                                    ) : (
+                                        careersData.map((item) => (
+                                            <tr key={item.id} className="hover:bg-blue-50/30 transition-colors">
+                                                <td className="p-5">
+                                                    <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-md text-sm font-bold">{item.year} 級</span>
+                                                </td>
+                                                <td className="p-5">
+                                                    <div className="flex items-center gap-3">
+                                                        {item.photo && <img src={item.photo} className="w-8 h-8 rounded-full object-cover border" />}
+                                                        <span className="font-bold text-slate-800">{item.name}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="p-5 text-slate-600 font-medium">
+                                                    {item.status || "資料更新中"}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                   </div>
                 </div>
               );
